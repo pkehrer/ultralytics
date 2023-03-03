@@ -22,22 +22,40 @@ def on_pretrain_routine_start(trainer):
 def on_train_epoch_end(trainer):
     experiment = comet_ml.get_global_experiment()
     if experiment:
-        experiment.log_metrics(trainer.label_loss_items(trainer.tloss, prefix='train'), step=trainer.epoch + 1)
+        experiment.log_metrics(
+            trainer.label_loss_items(trainer.tloss, prefix='train'),
+            epoch=trainer.epoch,
+            step=trainer.step)
         if trainer.epoch == 1:
             for f in trainer.save_dir.glob('train_batch*.jpg'):
-                experiment.log_image(f, name=f.stem, step=trainer.epoch + 1)
+                experiment.log_image(f, name=f.stem, step=trainer.step)
 
 
 def on_fit_epoch_end(trainer):
     experiment = comet_ml.get_global_experiment()
     if experiment:
-        experiment.log_metrics(trainer.metrics, step=trainer.epoch + 1)
+        def fix_metric_name(name):
+            """Remove (B) or (M) from metric names for more standard comet logging"""
+            trimmed_name = name[:-3] if name.endswith('(B)') or name.endswith('(M)') else name
+
+            # rename metrics to match yolov5 integration
+            name_changes = {
+                'metrics/mAP50': 'metrics/mAP_0.5',
+                'metrics/mAP50-95': 'metrics/mAP_0.5:0.95',
+            }
+            return name_changes[trimmed_name] if trimmed_name in name_changes else trimmed_name
+
+        metrics = {fix_metric_name(key): value for key, value in trainer.metrics.items()}
+        experiment.log_metrics(
+            metrics,
+            epoch=trainer.epoch,
+            step=trainer.step)
         if trainer.epoch == 0:
             model_info = {
                 'model/parameters': get_num_params(trainer.model),
                 'model/GFLOPs': round(get_flops(trainer.model), 3),
                 'model/speed(ms)': round(trainer.validator.speed['inference'], 3)}
-            experiment.log_metrics(model_info, step=trainer.epoch + 1)
+            experiment.log_metrics(model_info)
 
 
 def on_train_end(trainer):
