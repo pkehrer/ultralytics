@@ -292,6 +292,7 @@ class BaseTrainer:
                 self.run_callbacks('on_train_batch_start')
                 # Warmup
                 ni = i + nb * epoch
+                self.step = ni
                 if ni <= nw:
                     xi = [0, nw]  # x interp
                     self.accumulate = max(1, np.interp(ni, xi, [1, self.args.nbs / self.batch_size]).round())
